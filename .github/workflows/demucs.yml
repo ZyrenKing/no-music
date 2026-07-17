@@ -1,1 +1,50 @@
+name: 🚀 Razi Fast Audio Isolation
 
+on:
+  workflow_dispatch:
+    inputs:
+      filename:
+        description: 'اسم ملف الصوت (مع الامتداد، مثال: bebattle.mp3)'
+        required: true
+        type: string
+
+jobs:
+  isolate-audio:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 جلب ملفات المستودع
+        uses: actions/checkout@v4
+
+      - name: 🐍 إعداد بيئة بايثون
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: ⚙️ تثبيت FFmpeg (مطلوب للصوت)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: 📦 تثبيت Demucs
+        run: pip install demucs PySoundFile
+
+      - name: 🎧 بدء عملية العزل (أقصى ضغط وسرعة)
+        run: |
+          filename="${{ github.event.inputs.filename }}"
+          echo "جاري معالجة الملف: $filename"
+          
+          # تشغيل الكود بنفس إعداداتك السابقة
+          python -m demucs -n mdx_q -d cpu --mp3 --mp3-bitrate 32 --two-stems=vocals -j 4 "$filename"
+          
+          # استخراج اسم الملف بدون الامتداد لمعرفة مسار الحفظ
+          basename=$(basename "$filename" | sed 's/\.[^.]*$//')
+          
+          # تجهيز مجلد للمخرجات ونقل الصوت البشري إليه
+          mkdir final_output
+          cp "separated/mdx_q/$basename/vocals.mp3" "final_output/${basename}_vocals_only.mp3"
+
+      - name: 💾 رفع الصوت البشري للتحميل (Artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pure-Vocals-Result
+          path: final_output/*.mp3
+          retention-days: 1
