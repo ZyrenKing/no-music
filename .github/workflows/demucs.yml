@@ -1,10 +1,10 @@
-name: 🚀 Razi Fast Audio Isolation
+name: 🚀 Razi High-Quality Audio Isolation (No FFmpeg)
 
 on:
   workflow_dispatch:
     inputs:
       filename:
-        description: 'اسم ملف الصوت (مع الامتداد، مثال: bebattle.mp3)'
+        description: 'اسم ملف الصوت الأصلي (مثال: bebattle.mp3)'
         required: true
         type: string
 
@@ -16,35 +16,35 @@ jobs:
       - name: 📥 جلب ملفات المستودع
         uses: actions/checkout@v4
 
-      - name: 🐍 إعداد بيئة بايثون
+      - name: 🐍 إعداد بيئة بايثون مستقرة
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.10' # نسخة مستقرة جداً لتفادي مشاكل التوافقية
 
-      - name: ⚙️ تثبيت FFmpeg (مطلوب للصوت)
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: 📦 تثبيت المكتبات (بما فيها NumPy و SoundFile)
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy soundfile torch demucs
 
-      - name: 📦 تثبيت Demucs
-        run: pip install demucs PySoundFile
-
-      - name: 🎧 بدء عملية العزل (أقصى ضغط وسرعة)
+      - name: 🎧 بدء عملية العزل (أعلى جودة WAV وبدون FFmpeg)
         run: |
           filename="${{ github.event.inputs.filename }}"
           echo "جاري معالجة الملف: $filename"
           
-          # تشغيل الكود بنفس إعداداتك السابقة
-          python -m demucs -n mdx_q -d cpu --mp3 --mp3-bitrate 32 --two-stems=vocals -j 4 "$filename"
+          # تشغيل demucs بدون خيار --mp3 وبدون خيارات الضغط 
+          # المخرجات ستكون WAV بأعلى جودة وبدون الحاجة لـ FFmpeg
+          python -m demucs -n mdx_q -d cpu --two-stems=vocals -j 4 "$filename"
           
-          # استخراج اسم الملف بدون الامتداد لمعرفة مسار الحفظ
+          # استخراج اسم الملف بدون الامتداد
           basename=$(basename "$filename" | sed 's/\.[^.]*$//')
           
-          # تجهيز مجلد للمخرجات ونقل الصوت البشري إليه
+          # تجهيز مجلد للمخرجات ونقل ملف الصوت البشري النقي WAV
           mkdir final_output
-          cp "separated/mdx_q/$basename/vocals.mp3" "final_output/${basename}_vocals_only.mp3"
+          cp "separated/mdx_q/$basename/vocals.wav" "final_output/${basename}_vocals_only.wav"
 
       - name: 💾 رفع الصوت البشري للتحميل (Artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: Pure-Vocals-Result
-          path: final_output/*.mp3
+          name: Pure-Vocals-WAV
+          path: final_output/*.wav
           retention-days: 1
