@@ -10,38 +10,51 @@ on:
 
 jobs:
   isolate-audio:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # اقرأ الملاحظة بالأسفل بخصوص الـ GPU
 
     steps:
       - name: 📥 جلب ملفات المستودع
         uses: actions/checkout@v4
 
+      - name: 🖥️ طباعة مواصفات الجهاز (CPU, RAM, GPU, Disk)
+        run: |
+          echo "==== 🧠 المعالج (CPU) ===="
+          lscpu | grep 'Model name' || echo "غير متوفر"
+          echo "==== 🐏 الذاكرة العشوائية (RAM) ===="
+          free -h
+          echo "==== 💾 المساحة التخزينية (Disk) ===="
+          df -h /
+          echo "==== 🎮 كرت الشاشة (GPU) ===="
+          nvidia-smi || echo "⚠️ لا يوجد كرت شاشة Nvidia متاح على هذا الخادم!"
+
       - name: 🐍 إعداد بيئة بايثون مستقرة
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10' # نسخة مستقرة جداً لتفادي مشاكل التوافقية
+          python-version: '3.10'
 
-      - name: 📦 تثبيت المكتبات (بما فيها NumPy و SoundFile)
+      - name: 📦 تثبيت المكتبات
         run: |
           python -m pip install --upgrade pip
-          pip install numpy soundfile torch demucs
-          pip install diffq
+          pip install numpy soundfile torch torchaudio demucs diffq
 
-      - name: 🎧 بدء عملية العزل (أعلى جودة WAV وبدون FFmpeg)
+      - name: 🎧 بدء عملية العزل (أقوى جودة وأسرع أداء)
         run: |
           filename="${{ github.event.inputs.filename }}"
           echo "جاري معالجة الملف: $filename"
           
-          # تشغيل demucs بدون خيار --mp3 وبدون خيارات الضغط 
-          # المخرجات ستكون WAV بأعلى جودة وبدون الحاجة لـ FFmpeg
-          python -m demucs -n mdx_q -d cpu --two-stems=vocals -j 4 "$filename"
+          # فحص توفر GPU وتحديده تلقائياً لتفادي تحطم السكريبت
+          DEVICE=$(python -c "import torch; print('cuda' if torch.cuda.is_available() else 'cpu')")
+          echo "سيتم استخدام: $DEVICE"
+          
+          # استخدام نموذج htdemucs_ft (النسخة المحسنة والأقوى)
+          python -m demucs -n htdemucs_ft -d "$DEVICE" --two-stems=vocals "$filename"
           
           # استخراج اسم الملف بدون الامتداد
           basename=$(basename "$filename" | sed 's/\.[^.]*$//')
           
-          # تجهيز مجلد للمخرجات ونقل ملف الصوت البشري النقي WAV
-          mkdir final_output
-          cp "separated/mdx_q/$basename/vocals.wav" "final_output/${basename}_vocals_only.wav"
+          # تجهيز مجلد للمخرجات
+          mkdir -p final_output
+          cp "separated/htdemucs_ft/$basename/vocals.wav" "final_output/${basename}_vocals_only.wav"
 
       - name: 💾 رفع الصوت البشري للتحميل (Artifact)
         uses: actions/upload-artifact@v4
